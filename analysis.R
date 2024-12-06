@@ -24,53 +24,44 @@ library(ROCR)
 library(pROC)
 
 
-# Define file paths (adjust paths as necessary)
 accident_file <- "./csv/accident_by_month_data.csv"
 cpi_file <- "./csv/cpi_data_monthly.csv"
 rainfall_file <- "./csv/hko_rf_monthly.csv"
 hsi_file <- "./csv/hsi_index_data.csv"
 traffic_file <- "./csv/traffic_data_monthly.csv"
 
-# Load datasets
 accidents <- read.csv(accident_file, stringsAsFactors = FALSE)
 cpi_data <- read.csv(cpi_file, stringsAsFactors = FALSE)
 rainfall <- read.csv(rainfall_file, stringsAsFactors = FALSE)
 hsi_data <- read.csv(hsi_file, stringsAsFactors = FALSE)
 traffic_data <- read.csv(traffic_file, stringsAsFactors = FALSE)
 
-# Inspect datasets
 head(accidents)
 head(cpi_data)
 head(rainfall)
 head(hsi_data)
 head(traffic_data)
 
-# Convert year_month to Date format (first day of the month)
 accidents$year_month <- as.Date(paste0(accidents$year_month, "-01"))
 cpi_data$year_month <- as.Date(paste0(cpi_data$year_month, "-01"))
 rainfall$year_month <- as.Date(paste0(rainfall$year_month, "-01"))
 hsi_data$year_month <- as.Date(paste0(hsi_data$year_month, "-01"))
 traffic_data$year_month <- as.Date(paste0(traffic_data$year_month, "-01"))
 
-# Merge datasets
 data_merged <- accidents %>%
   left_join(cpi_data, by = "year_month") %>%
   left_join(rainfall, by = "year_month") %>%
   left_join(hsi_data, by = "year_month") %>%
   left_join(traffic_data, by = "year_month")
 
-# Check for missing values
 summary(data_merged)
 
-# Calculate accidents per thousand vehicles
 data_merged <- data_merged %>%
   mutate(accidents_per_thousand = total_road_traffic_accidents / (total_in_thousands))
-
-# Calculate traffic density (vehicles per day)
 data_merged <- data_merged %>%
   mutate(traffic_density = total_in_thousands / no_of_days_in_the_year_month)
 
-# Inspect the new features
+
 head(data_merged)
 
 # Select numerical columns for correlation
@@ -80,7 +71,6 @@ numeric_vars <- data_merged %>%
          total_in_thousands, no_of_days_in_the_year_month, accidents_per_thousand, 
          traffic_density)
 
-# Compute correlation matrix
 cor_matrix <- cor(numeric_vars, use = "complete.obs")
 
 ggcorrplot(cor_matrix, 
@@ -90,7 +80,6 @@ ggcorrplot(cor_matrix,
            title = "Correlation Matrix Heatmap") +
   theme(axis.text.x = element_text(angle = 45, hjust = 1))
 
-# Remove rows with missing or non-finite values
 data_merged <- data_merged %>%
   filter(!is.na(total_road_traffic_accidents) & !is.na(average_rainfall) & !is.na(traffic_density))
 
@@ -107,14 +96,9 @@ ggplot(data_merged, aes(x = traffic_density, y = total_road_traffic_accidents)) 
   labs(title = "Accidents vs. Traffic Density", x = "Traffic Density (vehicles per day)", y = "Total Road Traffic Accidents")
 
 # Check the length of the time series
-if (nrow(data_merged) >= 24) {  # Ensure at least 2 years of monthly data
-  # Convert to time series object
+if (nrow(data_merged) >= 24) {
   accidents_ts <- ts(data_merged$total_road_traffic_accidents, start = c(year(min(data_merged$year_month)), month(min(data_merged$year_month))), frequency = 12)
-
-  # Decompose the time series
   decomp <- decompose(accidents_ts, type = "additive")
-
-  # Plot the decomposed components
   plot(decomp)
 } else {
   print("Not enough data for time series decomposition")
@@ -127,11 +111,10 @@ ggplot(data_merged, aes(x = year_month, y = total_road_traffic_accidents)) +
        x = "Year-Month", y = "Total Road Traffic Accidents") +
   theme_minimal()
 
-  # Extract month as a separate column
+# Extract month as a separate column
 data_merged <- data_merged %>%
   mutate(month = month(year_month, label = TRUE, abbr = TRUE))  # Extract month as a factor (Jan, Feb, etc.)
 
-# Calculate average accidents by month
 monthly_seasonality <- data_merged %>%
   group_by(month) %>%
   summarise(avg_accidents = mean(total_road_traffic_accidents, na.rm = TRUE))
@@ -166,14 +149,14 @@ ggplot(data_merged, aes(x = year_month, y = total_road_traffic_accidents)) +
   theme_minimal()
 
 
-  # Box plot to identify outliers
+# Box plot to identify outliers
 ggplot(data_merged, aes(x = month, y = total_road_traffic_accidents)) +
   geom_boxplot(fill = "lightblue", outlier.color = "red", outlier.size = 2) +
   labs(title = "Distribution of Traffic Accidents by Month",
        x = "Month", y = "Total Road Traffic Accidents") +
   theme_minimal()
 
-  # Aggregate accidents by quarter
+# Aggregate accidents by quarter
 data_quarterly <- data_merged %>%
   mutate(quarter = yearquarter(year_month)) %>%
   group_by(quarter) %>%
@@ -186,18 +169,13 @@ ggplot(data_quarterly, aes(x = quarter, y = total_accidents)) +
        x = "Quarter", y = "Total Accidents") +
   theme_minimal()
 
-
 # Add time-based features
 data_merged <- data_merged %>%
-  mutate(year = year(year_month),        # Extract year
-         month = month(year_month),      # Extract month as numeric
-         quarter = quarter(year_month))  # Extract quarter
+  mutate(year = year(year_month),      
+         month = month(year_month),  
+         quarter = quarter(year_month))
 
-# Inspect the new features
 head(data_merged)
-
-
-# PART2: Principle Component Analysis
 
 # Select relevant numerical variables for PCA
 pca_vars <- data_merged %>%
@@ -209,23 +187,14 @@ pca_vars <- data_merged %>%
          total_in_thousands, no_of_days_in_the_year_month, 
          accidents_per_thousand, traffic_density)
 
-# Handle missing values (e.g., remove rows with NA)
 pca_vars_clean <- pca_vars %>%
   drop_na()
 
-# Scale the data
 pca_scaled <- scale(pca_vars_clean)
-
-# Perform PCA
 pca_result <- prcomp(pca_scaled, center = TRUE, scale. = TRUE)
 
-# Summary of PCA
 summary(pca_result)
-
-# Scree plot
 screeplot(pca_result, type = "lines", main = "Scree Plot")
-
-# Scree plot using ggplot2
 pca_var <- pca_result$sdev^2
 pca_var_percent <- pca_var / sum(pca_var) * 100
 pca_df <- data.frame(PC = paste0("PC", 1:length(pca_var_percent)),
@@ -241,12 +210,11 @@ ggplot(pca_df, aes(x = PC, y = Variance)) +
   theme_minimal()
 
 # Biplot of the first two principal components
-
 autoplot(pca_result, data = data_merged, colour = 'total_road_traffic_accidents') +
   ggtitle("PCA Biplot") +
   theme_minimal()
 
-  # Loadings of the first few principal components
+# Loadings of the first few principal components
 pca_loadings <- pca_result$rotation[, 1:5]
 print(pca_loadings)
 
@@ -257,7 +225,6 @@ cum_var <- cumsum(pca_result$sdev^2) / sum(pca_result$sdev^2)
 num_pcs <- which(cum_var >= 0.90)[1]
 cat("Number of principal components to retain for 90% variance:", num_pcs, "\n")
 
-
 # Extract the selected principal components
 selected_pcs <- as.data.frame(pca_result$x[, 1:num_pcs])
 
@@ -266,7 +233,6 @@ regression_data <- data_merged %>%
   select(year_month, total_road_traffic_accidents) %>%
   bind_cols(selected_pcs)
 
-# Inspect the regression dataset
 head(regression_data)
 
 # Remove 'accidents_per_thousand' due to high correlation
@@ -296,7 +262,6 @@ set.seed(2641)
 split <- sample.split(data_final$total_road_traffic_accidents, SplitRatio = 0.7)
 train_data <- subset(data_final, split == TRUE)
 test_data <- subset(data_final, split == FALSE)
-# Check the number of observations in training data
 cat("Number of training observations:", nrow(train_data), "\n")
 
 
@@ -309,7 +274,6 @@ multivar_lm <- lm(total_road_traffic_accidents ~ composite_consumer_price_index 
 
 # Summary of the model
 summary(multivar_lm)
-
 
 # Predict on the test set
 test_data$predicted_accidents <- predict(multivar_lm, newdata = test_data)
@@ -343,7 +307,6 @@ split_log <- sample.split(data_final$high_risk, SplitRatio = 0.7)
 train_data_log <- subset(data_final, split_log == TRUE)
 test_data_log <- subset(data_final, split_log == FALSE)
 
-# Build the logistic regression model with reduced predictors
 logistic_model <- glm(high_risk ~ composite_consumer_price_index +
                         year_on_year_percent_change +
                         average_rainfall +
@@ -351,9 +314,7 @@ logistic_model <- glm(high_risk ~ composite_consumer_price_index +
                       data = train_data_log,
                       family = binomial)
 
-# Summary of the model
 summary(logistic_model)
-
 
 # Predict probabilities on the test set
 test_data_log$predicted_prob <- predict(logistic_model, newdata = test_data_log, type = "response")
@@ -444,7 +405,7 @@ ggplot(scenarios, aes(x = increase_pct, y = required_officers)) +
        y = "Estimated Required Officers") +
   theme_minimal()
 
- # Recalculate RMSE and R-squared for clarity
+# Recalculate RMSE and R-squared for clarity
 rmse <- sqrt(mean((test_data$total_road_traffic_accidents - test_data$predicted_accidents)^2))
 r_squared <- summary(multivar_lm)$r.squared
 
@@ -461,7 +422,6 @@ ggplot(test_data, aes(x = total_road_traffic_accidents, y = predicted_accidents)
   theme_minimal()
 
 # Accuracy, Precision, Recall already calculated earlier
-
 # Additionally, plot the ROC Curve with AUC
 roc_obj <- roc(test_data_log$high_risk, test_data_log$predicted_prob)
 plot(roc_obj, main = "ROC Curve for Logistic Regression Model")

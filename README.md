@@ -30,7 +30,7 @@
 ├── requirements.txt # Python dependencies
 ├── Rplots.pdf # Plot of the model
 ├── summary.pdf # Summary of the project
-├── summary.md # Summary of the project
+├── summary.md # Summary of the project produced in R analysis
 ├── README.md
 ├── analysis.R # R script for running the model
 └── rf_convert.py # Python script for converting daily rainfall data to monthly
